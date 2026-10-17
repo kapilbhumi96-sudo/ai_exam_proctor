@@ -4,7 +4,7 @@ Desktop proctoring app that detects face absence, multiple faces and looking-awa
 
 ## Progress
 - [x] Week 1 - Webcam capture, frame queue, live preview
-- [ ] Week 2 - Face detection
+- [x] Week 2 - Face detection
 - [ ] Week 3 - Head pose
 - [ ] Week 4 - Rule engine
 - [ ] Week 5 - Event logger, risk score, alert UI
