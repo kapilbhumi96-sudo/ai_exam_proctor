@@ -3,8 +3,11 @@ package com.proctor;
 import com.proctor.capture.CaptureConfig;
 import com.proctor.capture.FramePacket;
 import com.proctor.capture.WebcamCapture;
-import com.proctor.detection.FaceDetector;
 import com.proctor.detection.FaceResult;
+import com.proctor.detection.YuNetFaceDetector;
+import com.proctor.pose.HeadPose;
+import com.proctor.pose.HeadPoseEstimator;
+import com.proctor.pose.PoseSmoother;
 import com.proctor.ui.FaceOverlay;
 import com.proctor.ui.PreviewWindow;
 import com.proctor.util.FpsMeter;
@@ -16,30 +19,34 @@ import javax.swing.SwingUtilities;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Week 2 entry point: webcam -> frame queue -> face detection -> live preview with boxes. */
+/** Week 3 entry point: webcam -> queue -> face + landmarks -> head pose -> live preview. */
 public class App {
 
     public static void main(String[] args) throws Exception {
         CaptureConfig config = CaptureConfig.defaults();
         AtomicBoolean windowOpen = new AtomicBoolean(true);
 
-        FaceDetector detector;
+        YuNetFaceDetector detector;
         try {
-            detector = new FaceDetector();
+            detector = new YuNetFaceDetector();
         } catch (IOException e) {
             System.err.println("Could not start face detector: " + e.getMessage());
             System.exit(1);
             return;
         }
 
-        PreviewWindow window = new PreviewWindow("AI Proctor - Week 2: Face Detection", () -> windowOpen.set(false));
+        PreviewWindow window = new PreviewWindow("AI Proctor - Week 3: Head Pose", () -> windowOpen.set(false));
         SwingUtilities.invokeAndWait(() -> window.setVisible(true));
 
         FpsMeter fpsMeter = new FpsMeter();
+        PoseSmoother smoother = new PoseSmoother(0.4);
 
         try (detector;
              WebcamCapture capture = new WebcamCapture(config);
@@ -64,16 +71,31 @@ public class App {
                     List<FaceResult> faces = detector.detect(packet.mat());
                     long detectMs = (System.nanoTime() - start) / 1_000_000;
 
-                    // The packet owns its Mat, so drawing on it is safe.
                     FaceOverlay.draw(packet.mat(), faces);
+
+                    // Head pose is computed for the largest face (the closest person).
+                    String poseText = "no pose";
+                    Optional<FaceResult> main = faces.stream()
+                            .filter(FaceResult::hasLandmarks)
+                            .max(Comparator.comparingInt(FaceResult::area));
+                    if (main.isPresent()) {
+                        Optional<HeadPose> raw = HeadPoseEstimator.estimate(main.get().landmarks());
+                        if (raw.isPresent()) {
+                            HeadPose pose = smoother.update(raw.get());
+                            FaceOverlay.drawPose(packet.mat(), main.get(), pose);
+                            poseText = String.format(Locale.ROOT, "yaw %+.0f pitch %+.0f roll %+.0f",
+                                    pose.yaw(), pose.pitch(), pose.roll());
+                        }
+                    } else {
+                        smoother.reset();
+                    }
 
                     Frame frame = toFrame.convert(packet.mat());
                     BufferedImage copy = copyOf(toImage.convert(frame)); // converter may reuse its buffer
 
                     fpsMeter.tick();
-                    String status = String.format("frame %d | %.1f FPS | faces %d | detect %d ms | dropped %d",
-                            packet.id(), fpsMeter.fps(), faces.size(), detectMs,
-                            capture.queue().droppedCount());
+                    String status = String.format(Locale.ROOT, "faces %d | %s | %.1f FPS | detect %d ms | dropped %d",
+                            faces.size(), poseText, fpsMeter.fps(), detectMs, capture.queue().droppedCount());
                     window.showFrame(copy, status);
                 }
             }

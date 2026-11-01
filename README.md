@@ -5,7 +5,7 @@ Desktop proctoring app that detects face absence, multiple faces and looking-awa
 ## Progress
 - [x] Week 1 - Webcam capture, frame queue, live preview
 - [x] Week 2 - Face detection
-- [ ] Week 3 - Head pose
+- [x] Week 3 - Head pose
 - [ ] Week 4 - Rule engine
 - [ ] Week 5 - Event logger, risk score, alert UI
 - [ ] Week 6 - Calibration and tuning
@@ -24,6 +24,8 @@ Requires JDK 17+, Maven, and a webcam.
 com.proctor
   App                 entry point
   capture/            webcam capture + bounded frame queue
+  detection/          face detection + landmarks
+  pose/               head pose estimation
   ui/                 Swing windows
   util/               small helpers
 ```
