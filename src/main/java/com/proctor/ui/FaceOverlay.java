@@ -3,12 +3,14 @@ package com.proctor.ui;
 import com.proctor.detection.FaceResult;
 import com.proctor.detection.Landmarks;
 import com.proctor.pose.HeadPose;
+import com.proctor.rules.EventType;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Point;
 import org.bytedeco.opencv.opencv_core.Scalar;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import static org.bytedeco.opencv.global.opencv_imgproc.FONT_HERSHEY_SIMPLEX;
 import static org.bytedeco.opencv.global.opencv_imgproc.LINE_8;
@@ -17,12 +19,15 @@ import static org.bytedeco.opencv.global.opencv_imgproc.circle;
 import static org.bytedeco.opencv.global.opencv_imgproc.putText;
 import static org.bytedeco.opencv.global.opencv_imgproc.rectangle;
 
-/** Draws face boxes, landmarks and head-pose text directly onto a frame (colors are BGR). */
+/** Draws face boxes, landmarks, head-pose text and alert banners directly onto a frame (colors are BGR). */
 public final class FaceOverlay {
 
     private static final Scalar GREEN = new Scalar(0, 200, 0, 0);
     private static final Scalar RED = new Scalar(0, 0, 255, 0);
     private static final Scalar YELLOW = new Scalar(0, 255, 255, 0);
+    private static final Scalar WHITE = new Scalar(255, 255, 255, 0);
+
+    private static final int BANNER_HEIGHT = 28;
 
     private FaceOverlay() {
     }
@@ -59,5 +64,23 @@ public final class FaceOverlay {
                 pose.yaw(), pose.pitch(), pose.roll());
         Point pos = new Point(face.x(), Math.min(frame.rows() - 6, face.y() + face.height() + 18));
         putText(frame, text, pos, FONT_HERSHEY_SIMPLEX, 0.5, YELLOW, 1, LINE_AA, false);
+    }
+
+    /** Draws a red banner across the top of the frame listing the active alerts. Does nothing if none. */
+    public static void drawAlerts(Mat frame, Set<EventType> active) {
+        if (active.isEmpty()) {
+            return;
+        }
+        StringBuilder text = new StringBuilder("ALERT: ");
+        boolean first = true;
+        for (EventType type : active) {
+            if (!first) {
+                text.append("  |  ");
+            }
+            text.append(type.label());
+            first = false;
+        }
+        rectangle(frame, new Point(0, 0), new Point(frame.cols(), BANNER_HEIGHT), RED, -1, LINE_8, 0);
+        putText(frame, text.toString(), new Point(8, 19), FONT_HERSHEY_SIMPLEX, 0.55, WHITE, 1, LINE_AA, false);
     }
 }
